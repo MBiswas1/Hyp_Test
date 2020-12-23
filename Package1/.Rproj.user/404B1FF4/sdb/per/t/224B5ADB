@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "#' This function gives us test statistic and corresponding p-value.\n#' @param data has n data points comprising X, Y, Z, and t\n#' @param X is a matrix. Each column of X corresponds to q many covariates of an individual\n#' @param Z is a matrix. Each column of Z corresponds to r many nuisance covariates of an individual.\n#' @param t is the list of n time points at which the data is available\n#' @param Y is a list of n responses at time points corresponding to t\n#' @param ker = 1 corresponds to linear kernel for X\n#'     = 2 corresponds to quadratic kernel for X\n#'     = 0 will correspond to gaussian kernel in the future\n#' @param sig is indicator for whether we are using sigma in the test statistic\n#' @export p value and test statistic\n\np_val <- function(data, kernel = 0, use.sig = 1 )\n{\n  require(mvtnorm)\n  require(mgcv)\n  require(face)\n  X <- data$X\n  Z <- data$Z\n  t.star <- data$t\n  Y <- data$Y\n  n <- ncol(X)\n  m.i <- lengths(t.star)\n  seq <- seq(1:n)\n  # Z1 <- sapply(seq,function(i) rep(Z[2,i], m.i[i]))\n  # Z2 <- sapply(seq,function(i) rep(Z[3,i], m.i[i]))\n  # Z1 <- c(unlist(Z1))\n  # Z2 <- c(unlist(Z2))\n  q <- nrow(Z)\n  Z0 <- matrix(NA,q,sum(m.i))\n  for(i in 1:q)\n    Z0[i,] <- unlist(sapply(seq,function(j) rep(Z[i,j], m.i[j])))\n  sim <- 10000\n  T1 <- rep(NA, sim)\n  t.2 <- unlist(t.star)\n  index <- as.numeric(ordered(t.2))\n  index <- tolist(index, m.i, n)\n  Y0 <- c(unlist(Y))\n  form <- \"Y0 ~ s(t.2)\"\n  for(i in 1:q)\n    form <- paste(form, \"+s(t.2, by = Z0[\",i,\",])\", sep = \"\")\n  t <- sort(unique(t.2))\n  m <- length(t)\n  E <- exp(-outer(t, t, function(a, b){abs(a-b)}))\n  fit <- gam(as.formula(form))\n  Y.center <- fit$residuals\n\n  # seq2 <- seq(1:sum(m.i))\n  # seq.t <- cbind(t.star, seq2)\n  # t.seq <- seq.t[order(t.star),]\n\n  if(kernel == 0)\n  { K <- ker_Xg(X, E)}else\n  if(kernel == 1)\n { K <- ker_X(X, E)}else\n   if(kernel == 2)\n   {K = ker_X2(X, E)}\n  index.star <- unlist(sapply(seq, function(i) unlist(index[i])+m*(i-1)))\n  K.0 <- kern_miss(index.star, K)\n\n  if(use.sig == 0)\n   { Y.sigi <- Y.center}  else\n     {\n       # Assume est.sigma works\n       est.sigma <- est_sig(Y, m, m.i, t, t.star, seq, index)\n       sig <- est.sigma$sig\n       sigi <- est.sigma$sigi\n       Y.sigi <- sigi %*% unlist(Y.center)\n       }\n       T0 <- test_stat(Y.sigi, K.0)\n       m.i.cum <- cumsum(m.i)\n       m.i.cum.low <- c(0, m.i.cum[-n])+1\n\n\n#Get new K\nfor(i in 1: sim)\n{\n  sam <- sample(n)\n  m.i.cum.new <- m.i.cum[sam]\n  m.i.cum.low.new <- m.i.cum.low[sam]\n  index.new <- index[sam]\n  index.star2 <- unlist(sapply(seq, function(i) unlist(index.new[i])+m*(i-1)))\n  index.star3 <- unlist(sapply(seq, function(i) seq(m.i.cum.low.new[i], m.i.cum.new[i])))\n  K1 <- kern_miss(index.star2, K)\n  Y.new <- Y.center[index.star3]\n  # Get test statistic\n  T1[i] <- as.vector(test.stat(Y.new, K1))\n}\n       p.val<- sum(T1>as.numeric(T0))/sim\n       return(list(p.val = p.val, test.stat = T0))\n}\n",
+    "created" : 1510324160690.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1230621697",
+    "id" : "224B5ADB",
+    "lastKnownWriteTime" : 1510328447,
+    "last_content_update" : 1510328447117,
+    "path" : "C:/partition1/NCSU/Research/Package1/Package1/R/p_val.R",
+    "project_path" : "R/p_val.R",
+    "properties" : {
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

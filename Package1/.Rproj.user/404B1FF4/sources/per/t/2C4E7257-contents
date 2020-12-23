@@ -1,0 +1,225 @@
+library(mvtnorm)
+library(mgcv)
+library(nnlasso)
+library(kernlab)
+library(clusterGeneration)
+library(glmnet)
+library(refund)
+library(fpca)
+
+# Getting the intervals
+dis.uni <- function(n)
+{
+  m.i <- ceiling(runif(n,6,14))
+  return(m.i)
+}
+
+# generate t
+t.gen <- function(m)
+{
+  return(seq(0,1,len = m))
+}
+
+# generate mu
+mu.gen <- function(t)
+{
+  return(t)
+}
+
+# Generate error
+err.gen<- function(n, m, t)
+{
+  zi <- rmvnorm(n,,diag(c(1, 2)))
+  wn <- matrix(rnorm(n*m), n)
+  fn <- sqrt(2) * rbind(cos(2 * pi * t), sin(2 * pi * t))
+  e <- zi %*% fn + wn
+  return(t(e))
+}
+
+# Generate X1
+x1.gen<- function(n,q)
+{
+  return(t(rmvnorm(n,,diag(q))))
+}
+
+data.gen <- function(n, m, t, q, seed = 1000, prob)
+{
+  set.seed(seed)
+  X <- x1.gen(n,q)
+  Z <- gen.cov(n, prob)
+  Y.star <- t(gen.eta(t)) %*% Z + err.gen(n, m, t)
+  m.i <- dis.uni(n)
+  Y.star2 <- NULL
+  index <- NULL
+  t.star <- NULL
+  for(i in 1:n)
+  {
+    index[[i]] <- sort(sample(seq(1:m), m.i[i]), decreasing = F)
+    Y.star2[[i]] <- Y.star[index[[i]],i]
+    t.star[[i]] <- t[index[[i]]]
+  }
+  return(list(X = X, Y = Y.star2, Z = Z, t.star=t.star, index = index, m.i = m.i))
+}
+
+ker.X <- function(X,t, c)
+{
+  K <- c*(t(X)%*%X)
+  return(K)
+}
+
+# ker.X2 <- function(X,t, m,)
+# {
+#   t <- as.matrix(t)
+#   c <- sum(outer(seq(1:m), seq(1:m), function(i,j) exp(-abs(t[i]-t[j]))))
+#   K <- c*t(X)%*%X
+#   return(K)
+# }
+
+kern.miss <- function(t,seq)
+{
+  n <- length(t)
+  C0 <- matrix(0, n, n)
+  for( i in 1:n )
+  {
+    C0[i, ] <- sapply(seq, function(j) sum(exp(-abs(Filter(Negate(is.null), intersect(unlist(t[i]), unlist(t[j])))))))
+    #mapply(function(i,j) intersect(unlist(t[i]), unlist(t[j])), t, t)
+  }
+  return(C0)
+}
+
+est.sig <- function(Y, m, t, index)
+{
+  # dat <- data.frame(.id = c(unlist(index)), .index = c(unlist(t.star)))
+  # dat$.value <- as.vector(unlist(Y.center))
+  # dat2 <- dat[with(dat, order(.id)),]
+  dat <- cbind(unlist(index), unlist(Y), unlist(t))
+  f <- fpca.mle(data.m = dat, M.set =5, r.set = 5)
+  eval <- f$eigenvalues
+  evec <- f$eigenfunctions[,c(1,seq(1:50)*10+1)]
+  f2 <- f$error_var
+  if(length(eval) == 1)
+  {  sig <- eval * t(evec) %*% evec + f2*diag(m)
+  }else
+    sig <- t(evec)%*%diag(eval)%*%evec + f2*diag(m)
+  return(list(sig = sig, eval = eval, evec = evec, f2 = f2))
+}
+
+
+test.stat <- function(X, Y, t, index, m, c)
+{
+  K <- ker.X(X, t, c)
+  n <- nrow(K)
+  Y.0 <- matrix(0,m,n)
+  for(i in 1:n)
+  Y.0[index[[i]],i] <- Y[[i]]
+  T <- sum(Y.0 %*% K %*% t(Y.0))
+  return(T)
+}
+
+distn <- function(X, t, m, m.i, n, index, sigma, c, fit.val, T, Z1, Z2)
+{
+  # y <- multi(n, m, eval, evec, f2)
+  y <- mvrnorm(n, rep(0, m), sigma)
+  K <- ker.X(X, t, c)
+  Y.star <- NULL
+  for(i in 1:n)
+    Y.star[[i]] <- t(y)[index[[i]],i]
+  Y.star2 <- unlist(Y.star) + fit.val
+  fit <- gam(Y.star2~s(T) + s(T, by = Z1) + s(T, by = Z2))
+  Y.center <- Y.star2 - fit$fitted.values
+  Y.center <- tolist(Y.center, m.i, n)
+  Y.0 <- matrix(0,m,n)
+  for(i in 1:n)
+    Y.0[index[[i]],i] <- Y.center[[i]]
+  T0 <- sum(Y.0 %*% K %*% t(Y.0))
+  return(T0)
+
+}
+
+gen.cov <- function(n, prob)
+{
+  z0 <- rep(1, n)
+  z1 <- rnorm(n)
+  z2 <- rbinom(n, 1, prob)
+  return(rbind(z0, z1, z2))
+}
+
+gen.eta <- function(t)
+{
+  mu <- mu.gen(t)
+  eta1 <- sin(2*pi*t)
+  eta2 <- cos(2*pi*t)
+  return(rbind(mu, eta1, eta2))
+}
+
+tolist <- function(Y, m.i, n)
+{
+  c <- 1
+  Y.l <- NULL
+  for(i in 1:n)
+  {
+    Y.l[[i]] <- Y[c : (c + m.i[i] - 1)]
+    c <- c + m.i[i]
+  }
+  return(Y.l)
+}
+
+## Body of code starts here
+
+s <- 2017
+n <- 100
+rep <- 1000
+m <- 51
+q <- 5
+t <- t.gen(m)
+sim <- 1000
+T <- rep(NA, sim)
+p.val <- rep(NA, rep)
+prob <- 0.4
+seq <- seq(1:n)
+
+for( r in 1:rep)
+{
+  # try({
+  # Generate data
+  data <- data.gen(n, m, t, q, seed = s, prob)
+  index <- data$index
+  m.i <- data$m.i
+  X <- data$X
+  Y <- data$Y
+  Z <- data$Z
+  Z1 <- sapply(seq,function(i) rep(Z[2,i], m.i[i]))
+  Z2 <- sapply(seq,function(i) rep(Z[3,i], m.i[i]))
+  Z1 <- c(unlist(Z1))
+  Z2 <- c(unlist(Z2))
+  t.star <- data$t.star
+  Y0 <- c(unlist(Y))
+  T <- c(unlist(t.star))
+
+  fit <- gam(Y0~s(T) + s(T, by = Z1) + s(T, by = Z2))
+  Y.center <- Y0 - fit$fitted.values
+  Y.center <- tolist(Y.center, m.i, n)
+
+  est.sigma <- est.sig(Y.center, m, t.star, index)
+  sig <- est.sigma$sig
+
+  C <- kern.miss(t.star, seq)
+
+  # Getting test statistics
+  T0 <- test.stat(X, Y.center, t.star, index, m, C)
+
+  #Simulating null distribution
+  T1 <- replicate(sim, distn(X, t.star, m, m.i, n, index, sig, C, fit$fitted.values, T, Z1, Z2))
+
+  #p-value
+  p.val[r] <- sum(T1>T0)/sim
+
+  # })
+
+  # Ready for next simulation
+  s <- s + 1
+
+}
+
+hist(p.val, nclass = 20)
+mean(p.val<0.05,na.rm=TRUE)

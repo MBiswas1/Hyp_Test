@@ -1,0 +1,359 @@
+library(mvtnorm)
+library(gam)
+library(nnlasso)
+library(kernlab)
+library(clusterGeneration)
+library(glmnet)
+library(fpca)
+
+# Getting the intervals
+dis.uni <- function(n)
+{
+  m.i <- ceiling(runif(n,6,13))
+  return(m.i)
+}
+
+# generate t
+t.gen <- function(m)
+{
+    return(seq(0,1,len=m+1)[-1])
+}
+
+# generate beta1
+beta1.gen <- function(x,t)
+{
+  y <- (rowSums(x))^2
+  beta <- exp(-(t%*%t(y)))
+  return(beta*15-20)
+}
+
+# Generate beta2
+beta2.gen <- function(x,t)
+{
+  return(kronecker(cos(2*pi*t),t((rowSums(x))^2)))
+}
+
+beta3.gen <- function(x,t)
+{
+  return(matrix(0,m,n))
+}
+
+beta4.gen <- function(x,t)
+{
+  return(matrix(0,m,n))
+}
+
+beta5.gen <- function(x,t)
+{
+  return(matrix(0,m,n))
+}
+
+# Generate error
+err.gen<- function(n,m,sigma=1)
+{
+  ar.sim <- matrix(NA,m,n)
+  for( i in 1:m)
+  ar.sim[i,]<-arima.sim(model=list(ar=sigma),n)
+  return(ar.sim)
+}
+
+# Generate general effect
+mu.gen<- function(t,n)
+{
+  return(kronecker(t,t(rep(1,n))))
+}
+
+# Generate X1
+x1.gen<- function(n,q)
+{
+  return(rmvnorm(n,,diag(q)))
+}
+
+# Generate X2
+x2.gen<- function(n,q, sigma = 0.2)
+{
+  ar.sim <- matrix(NA,n,q)
+  for( i in 1:q)
+    ar.sim[,i]<-arima.sim(model=list(ar=sigma),n)
+  return(ar.sim)
+}
+
+# Generate X3
+x3.gen<- function(n,q)
+{
+  return(rmvnorm(n,,diag(seq(1,q))))
+}
+
+# Generate X4
+x4.gen<- function(n, q)
+{
+  return(rmvnorm(n,,2*diag(q)))
+}
+
+# Generate X5
+x5.gen<- function(n, q)
+{
+  return(rmvnorm(n,,diag(seq(1,q)+1)))
+}
+
+# Generate X6
+x6.gen<- function(n, q, sigma=0.4)
+{
+  ar.sim <- matrix(NA,n,q)
+  for( i in 1:q)
+    ar.sim[,i]<-arima.sim(model=list(ar=sigma),n)
+  return(ar.sim)
+}
+
+# Generate X7
+x7.gen<- function(n, q)
+{
+  ar.sim<-arima.sim(model=list(ar=0.5),n=n*q)
+  return(matrix(ar.sim,nrow=n))
+}
+
+# Generate X8
+x8.gen<- function(n,q)
+{
+  return(rmvnorm(n,,diag(q)))
+}
+
+# Generate X9
+x9.gen<- function(n,q)
+{
+  return(rmvnorm(n,,2*diag(q)))
+}
+
+# Generate X10
+x10.gen<- function(n, q, sigma=0.9)
+{
+  ar.sim <- matrix(NA,n,q)
+  for( i in 1:q)
+    ar.sim[,i]<-arima.sim(model=list(ar=sigma),n)
+  return(ar.sim)
+}
+
+# Get upper triangle
+get.upper.tri <- function(x)
+{
+  return(x[upper.tri(x, diag=FALSE)])
+}
+
+data.gen <- function(p, n, m, q, seed = 1000, rho)
+{
+  set.seed(seed)
+  t <- t.gen(m)
+  X <- array(NA,dim=c(p, n, q))
+  X[1,,] <- x1.gen(n,q)
+  X[2,,] <- x2.gen(n,q)
+  X[3,,] <- x3.gen(n,q)
+  X[4,,] <- x4.gen(n,q)
+  X[5,,] <- x5.gen(n,q)
+  beta1 <- beta1.gen(X[1,,], t)
+  beta2 <- beta2.gen(X[2,,], t)
+  Y.star <- mu.gen(t,n) + beta1 + beta2 + err.gen(n,m,rho)
+  m.i <- dis.uni(n)
+  Y.star2 <- NULL
+  index <- NULL
+  t.star <- NULL
+  for(i in 1:n)
+  {
+	index[[i]] <- sort(sample(seq(1:m), m.i[i]), decreasing = FALSE)
+  	Y.star2[[i]] <- Y.star[index[[i]],i]
+	t.star[[i]] <- t[index[[i]]]
+  }
+#   mu.hat <- sapply(Y.star2, mean)
+#   Y <-lapply(seq_along(Y.star2), function(i)  unlist(Y.star2[i])-mu.hat[i])
+  return(list(X = X, Y = Y.star2, t.star=t.star))
+}
+
+kern.sel <- function(k,s)
+{
+  if (k==1)
+    return(rbfdot(s))
+  else if(k==2)
+    return(laplacedot(s))
+  else if (k==3)
+    return(polydot(2,s))
+  else if (k==4)
+    return(polydot(3,s))
+}
+
+var.sel <- function(p, n, X, Y, t.star, sigma, choice = 1, b, d)
+{
+  len <- length(sigma)
+  T <- array(NA, dim = c(p,n,n))
+  R <- matrix(NA,n*(n-1)/2, p)
+  Y0 <- unlist(Y)
+  t0 <- unlist(t.star)
+  index<- NULL
+  for( i in 1:n)
+  index <- c(index, rep(i,length(Y[[i]])))
+  data <- cbind(index, Y0, t0)
+  mle <- fpca.mle(data, b, d)
+  scores <- fpca.score(data, mle$grid, mle$fitted_mean, mle$eigenvalues, mle$eigenfunctions, mle$error_var, d)
+  Y1 <- scores%*%t(scores)
+  sum.Y <- get.upper.tri(Y1)
+  coeff <- matrix(0, len, p)
+  se <- matrix(NA, len, p)
+  max <- rep(1e32,p)
+  for( iter in 1: len)
+  {
+  kernel <- kern.sel(choice, sigma[iter])
+  for( i in 1: p)
+    T[i,,] <-  kernelMatrix(kernel,X[i,,])
+
+  for( i in 1: p)
+    R[,i] <- get.upper.tri(T[i,,])
+
+  cv <- cv.nnlasso(R, sum.Y, family="normal", nlambda=100, plot = FALSE, errorbars = FALSE)
+  lambda <- cv$lambda #keeps changing
+  l1 <- cv$lambdas[1]
+  if(lambda==l1)
+   { se[iter,]<- max
+  }else {Tau.nn <- nnlasso(R, sum.Y, path=FALSE, lambda = lambda, family = "normal", SE=TRUE, eps=-1e-64)
+  coeff[iter,]<- Tau.nn$coef[2,]
+  se[iter,]<- Tau.nn$se[-1]
+  }
+  }
+  min <- which.min(apply(se^2,1,sum))
+  min.coeff<- coeff[min,]
+  sig <- sigma[min]
+  ls <- lsfit(R, sum.Y, intercept = FALSE)$coef
+  return(list(coeff = min.coeff, sig=sig, ls = ls))
+}
+
+
+## Body of code starts here
+
+a <- 2
+b <- 10 # Number of basis functions
+d <- 5 # Number of non-zero eigen values
+s <- 2016
+n <- 100
+rep <- 1000
+m <- 50
+p <- 5
+q <- 5
+t <- t.gen(m)
+coeff.est <- matrix(NA, rep, p)
+per.false <- rep(TRUE, rep)
+ls <- matrix(NA, rep, p)
+ls.l <- matrix(NA, rep, p)
+X.l <- array(NA, c(p,n,q))
+coeff.est.l <- matrix(NA, rep, p)
+per.false.l <- rep(TRUE, rep)
+# coeff.est.q <- matrix(NA, rep, p)
+# per.false.q <- rep(TRUE, rep)
+# ls.q <- matrix(NA, rep, p)
+# coeff.est.c <- matrix(NA, rep, p)
+# per.false.c <- rep(TRUE, rep)
+# ls.c <- matrix(NA, rep, p)
+beta1 <-array(NA, c(rep,m,n))
+beta2 <-array(NA, c(rep,m,n))
+sigma <- 2^seq(-5,1)
+sig <- rep(NA, rep)
+sig.l <- rep(NA, rep)
+rho <- 0.6
+
+for( r in 1:rep)
+{
+
+  # Generate data
+  data <- data.gen(p, n, m, q, seed = s, rho=rho)
+  X <- data$X
+  Y <- data$Y
+  t.star <- data$t.star
+
+  # Get coefficients
+  results <- try(var.sel(p, n, X, Y, t.star, sigma, 1, b, d), silent= TRUE)
+  coeff.est[r,] <- try(results$coeff, silent= TRUE)
+  ls[r,] <- try(results$ls, silent= TRUE)
+  sig[r]<- try(results$sig, silent= TRUE)
+
+  results.l <- try(var.sel(p, n, X, Y, t.star, sigma, 2, b, d), silent= TRUE)
+  coeff.est.l[r,] <- try(results.l$coeff, silent= TRUE)
+  ls.l[r,] <- try(results.l$ls, silent= TRUE)
+  sig.l[r] <- try(results.l$sig, silent= TRUE)
+
+#   results.q <- var.sel(p, n, X, Y, dt, sigma, 3)
+#   coeff.est.q[r,] <- results.q$coeff
+#   ls.q[r,] <- results.q$ls
+#
+#   results.c <- var.sel(p, n, X, Y, dt, sigma, 4)
+#   coeff.est.c[r,] <- results.c$coeff
+#   ls.c[r,] <- results.c$ls
+
+  s <- s + 1
+
+}
+
+per0 <- colMeans(coeff.est>1e-4)*100
+per.true <- (coeff.est[,1]>1e-4) & (coeff.est[,2]>1e-4)
+
+for( i in (a + 1) : p )
+  per.false <- per.false & (coeff.est[,i]<=1e-4)
+per.whole <- per.true & per.false
+
+per.true <- mean(per.true)*100
+per.false <- mean(per.false)*100
+per.whole <- mean(per.whole)*100
+
+#boxplot(ls, outline = FALSE)
+
+per.l0 <- colMeans(coeff.est.l>1e-4)*100
+per.true.l <- (coeff.est.l[,1]>1e-4) & (coeff.est.l[,2]>1e-4)
+for( i in (a + 1) : p )
+  per.false.l <- per.false.l & (coeff.est.l[,i]<=1e-4)
+per.whole.l <- per.true.l & per.false.l
+per.true.l <- mean(per.true.l)*100
+per.false.l <- mean(per.false.l)*100
+per.whole.l <- mean(per.whole.l)*100
+#boxplot(ls.l, outline = FALSE)
+
+# per.q0 <- colMeans(coeff.est.q>1e-4)*100
+# per.true.q <- (coeff.est.q[,1]>1e-4) & (coeff.est.q[,2]>1e-4)
+# for( i in (a + 1) : p )
+#   per.false.q <- per.false.q & (coeff.est.q[,i]<=1e-4)
+# per.whole.q <- per.true.q & per.false.q
+# per.true.q <- mean(per.true.q)*100
+# per.false.q <- mean(per.false.q)*100
+# per.whole.q <- mean(per.whole.q)*100
+# #boxplot(ls.q, outline = FALSE)
+#
+# per.c0 <- colMeans(coeff.est.c>1e-4)*100
+# per.true.c <- (coeff.est.c[,1]>1e-4) & (coeff.est.c[,2]>1e-4)
+# for( i in (a + 1) : p )
+#   per.false.c <- per.false.c & (coeff.est.c[,i]<=1e-4)
+# per.whole.c <- per.true.c & per.false.c
+# per.true.c <- mean(per.true.c)*100
+# per.false.c <- mean(per.false.c)*100
+# per.whole.c <- mean(per.whole.c)*100
+# #boxplot(ls.c, outline = FALSE)
+#
+# per0
+# per.l0
+# per.q0
+# per.c0
+#
+# per.true
+# per.false
+# per.whole
+#
+# per.true.l
+# per.false.l
+# per.whole.l
+#
+# per.true.q
+# per.false.q
+# per.whole.q
+#
+# per.true.c
+# per.false.c
+# per.whole.c
+
+sig
+sig.l
+
+#refund/fpca.sc,fpca.face
+#Generate error from eigen function

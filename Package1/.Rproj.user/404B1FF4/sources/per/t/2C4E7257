@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1510123247931.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1337103863",
+    "id" : "2C4E7257",
+    "lastKnownWriteTime" : 1510123330,
+    "last_content_update" : 1510123330168,
+    "path" : "C:/partition1/NCSU/Research/Dr. Maity/score_missing.R",
+    "project_path" : null,
+    "properties" : {
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
