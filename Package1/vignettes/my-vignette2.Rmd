@@ -1,0 +1,72 @@
+---
+title: "Hypothesis Test"
+author: "Mityl Biswas"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Hypothesis Testing}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+## Description
+Return the test statistic and estimated p-value for function on scalar regression hypothesis testing from Biswas et. al approach, testing if a scalar predictor is correlated to a functional response..
+
+## Model
+$Y_i(t_{ij}) = \sum_{\ell=1}^qZ_{i\ell}\eta_\ell(t_{ij}) + \beta(\mathbf{X}_i, t_{ij}) + \varepsilon_i(t_{ij})$
+where $Y_i(t_{ij})$ is the observed response corresponding to individual $i$ at time $t_{ij}$, $Z_{i\ell}$ is the $\ell^{th}$ observed covariate which is not of interest to us (nuisance) for individual $i$, $\mathbf{X}_i = (X_{i1}, \ldots, X_{ip})^T$, is the vector of observed covariates of interest to us corresponding to $Y_i(t_{ij})$, at time $t_{ij}$ for individual $i$, $\beta(\cdot, \cdot)$ is a function determining how the observed response depends on the covariates of interest,  $\eta_\ell(t_{ij})$ are the regression coefficients of $Z_{i\ell}$, and $\varepsilon_i(t_{ij})$ are error terms for the $i^{th}$ individual at time $t_{ij}$, for $t_{ij}$ belonging to some bounded continuous interval, $i = 1, \ldots, n, j = 1, \ldots, m_i, \ell = 1, \ldots, q$. The $\epsilon_i(\cdot)$ are assumed to be Gaussian processes with mean $\mathbf{0}$, that are independent of each other, for $i = 1, \ldots, n$. We also assume that $\epsilon_i(\cdot)$ are independent of $\beta(\cdot, \cdot)$, $\mathbf{X}_i$ and $Z_{i\ell}$ for $i = 1, \ldots, n, \ell = 1, \ldots, q$. $\mathbf{X}_i$ and $Z_{i\ell}$ are assumed to be independent of each other for $\ell = 1, \ldots, q$. In order to account for the intercept term, we shall specify $Z_{i1} = 1$, for $i = 1, \ldots, n$.
+
+## Hypothesis test 
+We test the null hypothesis, $H_0: \beta(\cdot, \cdot) = 0$ against the alternate hypothesis, $H_0: \beta(\cdot, \cdot) \neq 0$.
+
+## Explanation of input variables
+data has n data points comprising X, Y, Z, and t.
+
+X is a matrix. Each column of X corresponds to q many covariates of an individual.
+
+Z is a matrix. Each column of Z corresponds to r many nuisance covariates of an individual.
+
+t is the list of n time points at which the data is available.
+
+Y is a list of n responses at time points corresponding to t.
+
+## Usage
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+```{r}
+# loading required packages
+  library(mvtnorm)
+  library(Package1)
+```
+## Example Data
+```{r}
+n <- 100 # number of individuals
+m <- 11 # number of time points
+t <- seq(0, 1, length = m) # the exhaustive list of time points
+q <- 3 # number of covariates of interest
+data <- NULL # data has n data points comprising X, Y, Z, and t
+data$X <- t(rmvnorm(n,,diag(q))) # X is a matrix. Each column of X corresponds to q many covariates of an individual
+data$Z <- t(as.matrix(rnorm(n))) # Z is a matrix. Each column of Z corresponds to r many nuisance covariates of an individual
+m.i <- ceiling(runif(n,5,8)) # the number of data points observed for each individual
+Y.star <- sin(2*pi*t) %*% data$Z + kronecker(t(exp(-colMeans(data$X))/2),t) + matrix(rnorm(n*m), m) # matrix of responses
+data$Y <- NULL # a list of n responses at time points corresponding to t
+index <- NULL # a list of the positions used to construct data$Y in this example
+data$t <- NULL # the list of n time points at which the data is available
+for(i in 1:n)
+{
+    index[[i]] <- sort(sample(seq(1:m), m.i[i]), decreasing = FALSE)
+    data$t[[i]] <- t[index[[i]]]
+    data$Y[[i]] <- Y.star[index[[i]],i]
+
+}
+```
+
+## Testing
+```{r}
+p.val <- p_val(data, 2) # invoking our function
+p.val # displaying the test statistic and estimated p-value
+
+```

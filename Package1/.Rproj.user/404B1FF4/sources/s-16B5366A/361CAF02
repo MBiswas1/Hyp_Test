@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1613595133025.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "79084095",
+    "id" : "361CAF02",
+    "lastKnownWriteTime" : 1521317670,
+    "last_content_update" : 1521317670,
+    "path" : "C:/partition1/NCSU/Research/Package1/Hyp_test/Package1/R/p_val.R",
+    "project_path" : null,
+    "properties" : {
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

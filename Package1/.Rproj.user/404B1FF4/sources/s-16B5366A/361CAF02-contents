@@ -1,7 +1,7 @@
 #' This function gives us test statistic and corresponding p-value for testing if a scalar predictor is correlated to a functional response.
 #' @param data has n data points comprising X, Y, Z, and t
 #' @param X is a matrix. Each column of X corresponds to q many covariates of an individual
-#' @param Z is a matrix. Each column of Z corresponds to r many nuisance covariates of an individual
+#' @param Z is a matrix. Each column of Z corresponds to r many nuisance covariates of an individual.
 #' @param t is the list of n time points at which the data is available
 #' @param Y is a list of n responses at time points corresponding to t
 #' @param ker = 1 corresponds to linear kernel for X
@@ -10,11 +10,11 @@
 #' @param sig is indicator for whether we are using sigma in the test statistic
 #' @details A functional response variable Y is regressed on scalar variables X and Z to determine if X is a significant contributor to Y.
 #' @return p.val is the p-value for the given data.
-#' @return test_stat is the test statistic obtained.
+#' @return test.stat is the test statistic obtained.
 #' @export p_val
 #' @author Mityl Biswas
 
-p_val <- function(data, kernel = 0)
+p_val <- function(data, kernel = 0, use.sig = 1 )
 {
   require(mvtnorm)
   require(mgcv)
@@ -62,12 +62,15 @@ p_val <- function(data, kernel = 0)
   index.star <- unlist(sapply(seq, function(i) unlist(index[i])+m*(i-1)))
   K.0 <- kern_miss(index.star, K)
 
+  if(use.sig == 0)
+   { Y.sigi <- Y.center}  else
+     {
        # Assume est.sigma works
        est.sigma <- est_sig(Y, t, t.star, index)
        sig <- est.sigma$sig
        sigi <- est.sigma$sigi
        Y.sigi <- sigi %*% unlist(Y.center)
-
+       }
        T0 <- test_stat(Y.sigi, K.0)
        m.i.cum <- cumsum(m.i)
        m.i.cum.low <- c(0, m.i.cum[-n])+1
@@ -83,10 +86,10 @@ for(i in 1: sim)
   index.star2 <- unlist(sapply(seq, function(i) unlist(index.new[i])+m*(i-1)))
   index.star3 <- unlist(sapply(seq, function(i) seq(m.i.cum.low.new[i], m.i.cum.new[i])))
   K1 <- kern_miss(index.star2, K)
-  Y.new <- Y.center[index.star3]
+  Y.new <- Y.sigi[index.star3]
   # Get test statistic
-  T1[i] <- as.vector(test_stat(Y.new, K1))
+  T1[i] <- as.vector(test.stat(Y.new, K1))
 }
        p.val<- sum(T1>as.numeric(T0))/sim
-       return(list(p.val = p.val, test_stat = T0))
+       return(list(p.val = p.val, test.stat = T0))
 }

@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1613594950917.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "2A365987",
+    "lastKnownWriteTime" : 1613594968,
+    "last_content_update" : 1613594968922,
+    "path" : "C:/partition1/NCSU/Research/Package1/Package1/vignettes/my-vignette2.Rmd",
+    "project_path" : "vignettes/my-vignette2.Rmd",
+    "properties" : {
+        "cursorPosition" : "69,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
